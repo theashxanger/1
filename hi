@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Image Pro - Generate & Edit</title>
+    <style>
+        /* CSS Styling */
+        :root {
+            --primary: #4f46e5;
+            --bg: #0f172a;
+            --card: #1e293b;
+            --text: #f8fafc;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            width: 90%;
+            max-width: 1100px;
+            margin: 40px auto;
+            background: var(--card);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+        header { text-align: center; margin-bottom: 30px; }
+        .main-layout {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 20px;
+        }
+        .preview-box {
+            background: #000;
+            border-radius: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 400px;
+            overflow: hidden;
+            border: 2px dashed #475569;
+        }
+        canvas { max-width: 100%; height: auto; }
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .group {
+            background: #334155;
+            padding: 15px;
+            border-radius: 10px;
+        }
+        label { display: block; margin-bottom: 8px; font-size: 0.9rem; font-weight: bold; }
+        input[type="text"], input[type="file"] {
+            width: 100%;
+            padding: 8px;
+            border-radius: 5px;
+            border: none;
+            margin-bottom: 10px;
+        }
+        button {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.3s;
+            background: #64748b;
+            color: white;
+            margin-bottom: 5px;
+        }
+        button:hover { opacity: 0.8; }
+        .btn-ai { background: var(--primary); }
+        .btn-download { background: #10b981; }
+        .slider { width: 100%; cursor: pointer; }
+        
+        @media (max-width: 850px) {
+            .main-layout { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>🤖 AI Image Studio</h1>
+        <p>Edit your photos or generate new ones from text</p>
+    </header>
+
+    <div class="main-layout">
+        <div class="preview-box" id="dropZone">
+            <canvas id="mainCanvas"></canvas>
+            <p id="placeholderText">Upload an image or generate one to start</p>
+        </div>
+
+        <div class="controls">
+            <div class="group">
+                <label>1. AI Generator</label>
+                <input type="text" id="aiPrompt" placeholder="Describe something (e.g. Space cat)">
+                <button class="btn-ai" onclick="generateAIImage()">Generate Image</button>
+            </div>
+
+            <div class="group">
+                <label>2. Upload Image</label>
+                <input type="file" id="fileInput" accept="image/*">
+            </div>
+
+            <div class="group">
+                <label>3. Instant Filters</label>
+                <button onclick="applyFilter('grayscale(100%)')">B&W Mode</button>
+                <button onclick="applyFilter('sepia(100%)')">Vintage Sepia</button>
+                <button onclick="applyFilter('invert(100%)')">Negative</button>
+                <button onclick="resetFilters()">Reset All</button>
+            </div>
+
+            <div class="group">
+                <label>4. Brightness</label>
+                <input type="range" class="slider" id="brightRange" min="0" max="200" value="100" oninput="manualAdjust()">
+            </div>
+
+            <button class="btn-download" onclick="downloadResult()">Download Image</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('mainCanvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const fileInput = document.getElementById('fileInput');
+    const placeholder = document.getElementById('placeholderText');
+    let imgElement = new Image();
+
+    // 1. Function: Upload Image
+    fileInput.onchange = (e) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            imgElement.onload = () => {
+                renderToCanvas(imgElement);
+            };
+            imgElement.src = event.target.result;
+        };
+        reader.readAsDataURL(e.target.files[0]);
+    };
+
+    // 2. Function: AI Image Generation (Using Pollinations AI API - Free)
+    async function generateAIImage() {
+        const prompt = document.getElementById('aiPrompt').value;
+        if (!prompt) return alert("Please type a description first!");
+
+        placeholder.innerText = "AI is drawing... please wait...";
+        const seed = Math.floor(Math.random() * 100000);
+        const aiUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&seed=${seed}&nologo=true`;
+
+        imgElement = new Image();
+        imgElement.crossOrigin = "Anonymous"; 
+        imgElement.onload = () => {
+            renderToCanvas(imgElement);
+            placeholder.innerText = "";
+        };
+        imgElement.src = aiUrl;
+    }
+
+    // 3. Function: Render Image to Canvas
+    function renderToCanvas(img) {
+        placeholder.style.display = "none";
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.filter = 'none';
+        ctx.drawImage(img, 0, 0);
+    }
+
+    // 4. Function: Apply Filters
+    function applyFilter(filter) {
+        if (!canvas.width) return alert("Upload/Generate an image first!");
+        ctx.filter = filter;
+        ctx.drawImage(imgElement, 0, 0);
+    }
+
+    // 5. Function: Manual Adjustment (Brightness)
+    function manualAdjust() {
+        if (!canvas.width) return;
+        const val = document.getElementById('brightRange').value;
+        ctx.filter = `brightness(${val}%)`;
+        ctx.drawImage(imgElement, 0, 0);
+    }
+
+    function resetFilters() {
+        if (!canvas.width) return;
+        document.getElementById('brightRange').value = 100;
+        renderToCanvas(imgElement);
+    }
+
+    // 6. Function: Download Result
+    function downloadResult() {
+        if (!canvas.width) return;
+        const link = document.createElement('a');
+        link.download = 'ai-studio-image.png';
+        link.href = canvas.toDataURL();
+        link.click();
+    }
+</script>
+
+</body>
+</html>
